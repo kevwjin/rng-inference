@@ -15,8 +15,9 @@ from lstm_data import (
     train_val_test_split,
 )
 
-SAMPLES_ROOT = Path("samples")
-DEFAULT_DATA_DIRS: tuple[Path, ...] = (SAMPLES_ROOT / "en-16",)
+import argparse
+
+ARTIFACTS_ROOT = Path("artifacts")
 NUM_CLASSES = 100
 
 
@@ -26,11 +27,6 @@ def get_device() -> torch.device:
 
 class SequenceDataset(Dataset[tuple[torch.Tensor, torch.Tensor]]):
     def __init__(self, seqs: torch.Tensor) -> None:
-        if seqs.ndim != 2:
-            raise ValueError("sequences tensor must be 2D")
-        if seqs.shape[1] < 2:
-            raise ValueError(
-                "sequences must have length >= 2 for next-token training")
         self.inputs = seqs[:, :-1]
         self.targets = seqs[:, 1:]
 
@@ -136,11 +132,25 @@ def prepare_data(
         to_tensor(dataset.test)
     )
 
-
 def main() -> int:
-    dirs = [path for path in DEFAULT_DATA_DIRS if path.exists()]
+    parser = argparse.ArgumentParser(description="Train an LSTM on integer sequences")
+    parser.add_argument(
+        "--data-dir",
+        type=Path,
+        required=True,
+        help="Directory containing NPZ files to train with",
+    )
+    parser.add_argument(
+        "--epochs",
+        type=int,
+        default=10,
+        help="Number of training epochs (default: 10)",
+    )
+    args = parser.parse_args()
+
+    dirs = [args.data_dir]
     if not dirs:
-        raise FileNotFoundError("no data directories found under samples/.")
+        raise FileNotFoundError("no data directories found under artifacts/.")
 
     train, val, test = prepare_data(dirs)
     device = get_device()
@@ -175,8 +185,16 @@ def main() -> int:
             f"acc={test_metrics.accuracy:.3f}"
         )
 
-    torch.save(model.state_dict(), "lstm_model.pt")
-    print("Saved model to lstm_model.pt")
+    # Derive output tag from data directory name
+    data_dir_name = dirs[0].name
+    lang, seq_len = data_dir_name.split("-")
+
+    output_dir = ARTIFACTS_ROOT / f"{lang}-{seq_len}"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    model_path = output_dir / f"{lang}-{seq_len}-lstm.pt"
+
+    torch.save(model.state_dict(), model_path)
+    print(f"Saved model to {model_path}")
     return 0
 
 
