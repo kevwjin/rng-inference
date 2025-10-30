@@ -21,6 +21,7 @@ SequenceExtractor = Callable[[str, int], List[int]]
 @dataclass
 class BatchResult:
     """Container for a single batch generation result."""
+
     index: int
     integers: List[int]
 
@@ -29,7 +30,7 @@ def build_prompt_en(count: int) -> str:
     """Create an English prompt that requests space-separated integers."""
     return (
         f"Write out a sequence of {count} random integers "
-        "between 0 and 100 inclusive. "
+        "between 1 and 100 inclusive. "
         "Separate the integers by a space ' ' character. "
         "DO NOT output anything else.\n"
     )
@@ -38,7 +39,7 @@ def build_prompt_en(count: int) -> str:
 def build_prompt_zh(count: int) -> str:
     """Create a Chinese prompt that requests space-separated integers."""
     return (
-        f"写出 {count} 个介于 0 到 100（包含）的随机整数。"
+        f"写出 {count} 个介于 1 到 100（包含）的随机整数。"
         "使用空格字符（' '）分隔这些整数。"
         "不要输出任何其他内容。\n"
     )
@@ -58,15 +59,15 @@ def run_ollama(prompt: str) -> subprocess.CompletedProcess[str]:
 
 def extract_sequence_en(response: str, expected_len: int) -> List[int]:
     response = response.strip()
-    xs = [x for x in response.split(" ") if x]
+    tokens = [token for token in response.split(" ") if token]
 
     integers: List[int] = []
-    for x in xs:
+    for token in tokens:
         try:
-            integers.append(int(x))
+            integers.append(int(token))
         except ValueError as e:
             raise RuntimeError(
-                f"model response contained a non-integer token {x!r}: "
+                f"model response contained a non-integer token {token!r}: "
                 f"{response!r}"
             ) from e
 
@@ -84,15 +85,15 @@ def extract_sequence_zh(response: str, expected_len: int) -> List[int]:
 
     lines = [line.strip() for line in response.splitlines() if line.strip()]
     if len(lines) == expected_len:
-        xs = [line.split()[-1] for line in lines]
+        tokens = [line.split()[-1] for line in lines]
 
         integers: List[int] = []
-        for x in xs:
+        for token in tokens:
             try:
-                integers.append(int(x))
+                integers.append(int(token))
             except ValueError as e:
                 raise RuntimeError(
-                    f"model response contained a non-integer token {x!r}: "
+                    f"model response contained a non-integer token {token!r}: "
                     f"{response!r}"
                 ) from e
         return integers
