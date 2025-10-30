@@ -6,9 +6,12 @@ import json
 import subprocess
 import sys
 from dataclasses import dataclass
-from typing import List, Sequence
+from typing import Callable, List, Sequence
 
 DEFAULT_MODEL = "llama3.2:3b-instruct-q4_0"
+
+PromptBuilder = Callable[[int], str]
+SequenceExtractor = Callable[[str, int], List[int]]
 
 
 @dataclass
@@ -19,13 +22,22 @@ class BatchResult:
     integers: List[int]
 
 
-def build_prompt(count: int) -> str:
-    """Create a prompt that requests space-separated integers."""
+def build_prompt_en(count: int) -> str:
+    """Create an English prompt that requests space-separated integers."""
     return (
-        f"Generate a sequence of {count} random integers "
+        f"Write out a sequence of {count} random integers "
         "between 0 and 100 inclusive. "
         "Separate the integers by a space ' ' character. "
         "DO NOT output anything else.\n"
+    )
+
+
+def build_prompt_zh(count: int) -> str:
+    """Create a Chinese prompt that mirrors the English instructions."""
+    return (
+        f"写出 {count} 个介于 0 到 100（包含）的随机整数。"
+        "使用空格字符（' '）分隔这些整数。"
+        "不要输出任何其他内容。\n"
     )
 
 
@@ -41,37 +53,58 @@ def run_ollama(prompt: str) -> subprocess.CompletedProcess[str]:
     )
 
 
-def extract_sequence(response: str, expected_len: int) -> List[int]:
+def extract_sequence_en(response: str, expected_len: int) -> List[int]:
     response = response.strip()
-    if not response:
-        raise RuntimeError("model returned an empty response")
-
-    parts = response.split(" ")
-    if "" in parts:
-        raise RuntimeError(
-            f"model did not return space-separated integers: {response!r}"
-        )
-
-    if len(parts) != expected_len:
-        raise RuntimeError(
-            f"expected {expected_len} integers, got {len(parts)}: {response!r}"
-        )
+    xs = [x for x in response.split(" ") if x]
 
     integers: List[int] = []
-    for part in parts:
+    for x in xs:
         try:
-            integers.append(int(part))
+            integers.append(int(x))
         except ValueError as e:
             raise RuntimeError(
-                f"model response contained a non-integer token {part!r}: "
-                "{response!r}"
+                f"model response contained a non-integer token {x!r}: "
+                f"{response!r}"
             ) from e
+
+    if len(integers) != expected_len:
+        raise RuntimeError(
+            f"expected {expected_len} integers, got {len(integers)}: "
+            f"{response!r}"
+        )
 
     return integers
 
 
-def generate_batch(i: int, seq_len: int) -> BatchResult:
-    prompt = build_prompt(seq_len)
+def extract_sequence_zh(response: str, expected_len: int) -> List[int]:
+    response = response.strip()
+
+    lines = [line.strip() for line in response.splitlines() if line.strip()]
+    if len(lines) == expected_len:
+        xs = [line.split()[-1] for line in lines]
+
+        integers: List[int] = []
+        for x in xs:
+           try:
+               integers.append(int(x))
+           except ValueError as e:
+               raise RuntimeError(
+                   f"model response contained a non-integer token {x!r}: "
+                   f"{response!r}"
+               ) from e
+        return integers
+
+    # Fall back to the space-separated format shared with the English prompt.
+    return extract_sequence_en(response, expected_len)
+
+
+def generate_batch(
+    i: int,
+    seq_len: int,
+    prompt_builder: PromptBuilder,
+    extractor: SequenceExtractor,
+) -> BatchResult:
+    prompt = prompt_builder(seq_len)
     process = run_ollama(prompt)
     if process.returncode != 0:
         stderr = process.stderr
@@ -81,7 +114,7 @@ def generate_batch(i: int, seq_len: int) -> BatchResult:
             + (f"Stderr: {stderr}" if stderr else "")
         )
 
-    seq = extract_sequence(process.stdout, expected_len=seq_len)
+    seq = extractor(process.stdout, seq_len)
     if len(seq) != seq_len:
         raise RuntimeError(
             f"Expected {seq_len} integers in batch {i}, "
@@ -92,10 +125,15 @@ def generate_batch(i: int, seq_len: int) -> BatchResult:
     return BatchResult(index=i, integers=seq)
 
 
-def run_batches(num_batches: int, seq_len: int) -> Sequence[BatchResult]:
+def run_batches(
+    num_batches: int,
+    seq_len: int,
+    prompt_builder: PromptBuilder,
+    extractor: SequenceExtractor,
+) -> Sequence[BatchResult]:
     results: List[BatchResult] = []
     for i in range(1, num_batches + 1):
-        results.append(generate_batch(i, seq_len))
+        results.append(generate_batch(i, seq_len, prompt_builder, extractor))
     return results
 
 
@@ -109,6 +147,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--sequence-length", "-n",
         type=int, default=10,
         help="Number of integers per sequence")
+    parser.add_argument(
+        "--prompt-language", "-l",
+        choices=("english", "en", "chinese", "zh"), default="english",
+        help="Prompt language to use for generation",
+    )
     args = parser.parse_args(argv)
 
     def validate_count(value: int, name: str) -> int:
@@ -122,9 +165,16 @@ def main(argv: Sequence[str] | None = None) -> int:
     except ValueError as e:
         parser.error(str(e))
 
+    if args.prompt_language in ("english", "en"):
+        prompt_builder = build_prompt_en
+        extractor = extract_sequence_en
+    else:
+        prompt_builder = build_prompt_zh
+        extractor = extract_sequence_zh
+
     try:
-        batches = run_batches(num_batches, seq_len)
-    except Exception as e:  # noqa: BLE001 - surface meaningful errors to CLI
+        batches = run_batches(num_batches, seq_len, prompt_builder, extractor)
+    except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
 
