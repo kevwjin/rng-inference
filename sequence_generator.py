@@ -17,7 +17,6 @@ SequenceExtractor = Callable[[str, int], List[int]]
 @dataclass
 class BatchResult:
     """Container for a single batch generation result."""
-
     index: int
     integers: List[int]
 
@@ -33,7 +32,7 @@ def build_prompt_en(count: int) -> str:
 
 
 def build_prompt_zh(count: int) -> str:
-    """Create a Chinese prompt that mirrors the English instructions."""
+    """Create a Chinese prompt that requests space-separated integers."""
     return (
         f"写出 {count} 个介于 0 到 100（包含）的随机整数。"
         "使用空格字符（' '）分隔这些整数。"
@@ -132,8 +131,15 @@ def run_batches(
     extractor: SequenceExtractor,
 ) -> Sequence[BatchResult]:
     results: List[BatchResult] = []
-    for i in range(1, num_batches + 1):
-        results.append(generate_batch(i, seq_len, prompt_builder, extractor))
+    i = 1
+    while len(results) < num_batches:
+        try:
+            result = generate_batch(i, seq_len, prompt_builder, extractor)
+        except RuntimeError as e:
+            print(f"Retrying batch {i} after error: {e}", file=sys.stderr)
+            continue
+        results.append(result)
+        i += 1
     return results
 
 
