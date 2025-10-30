@@ -129,6 +129,12 @@ def generate_batch(
     return BatchResult(index=i, integers=seq)
 
 
+def validate_count(value: int, name: str) -> int:
+    if value <= 0:
+        raise ValueError(f"{name} must be positive, got {value}")
+    return value
+
+
 def run_batches(
     num_batches: int,
     seq_len: int,
@@ -170,11 +176,6 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
-    def validate_count(value: int, name: str) -> int:
-        if value <= 0:
-            raise ValueError(f"{name} must be positive, got {value}")
-        return value
-
     try:
         num_batches = validate_count(args.num_batches, "--num-batches")
         seq_len = validate_count(args.sequence_length, "--sequence-length")
@@ -203,8 +204,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         output_dir.mkdir(parents=True, exist_ok=True)
         filename = f"{prefix}-{seq_len}-{num_batches}.npz"
         output_path = output_dir / filename
-        sequences_array = np.asarray(seqs, dtype=np.int64)
-        np.savez(output_path, sequences=sequences_array)
+        seqs_np = np.asarray(seqs, dtype=np.int64)
+        np.savez(output_path, sequences=seqs_np)
 
     return 0
 
