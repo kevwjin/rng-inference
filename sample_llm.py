@@ -12,7 +12,7 @@ from typing import Callable, List, Sequence
 import numpy as np
 
 DEFAULT_MODEL = "llama3.2:3b-instruct-q4_0"
-NPZ_EXPORT_ROOT = Path("samples")
+ARTIFACT_ROOT = Path("artifacts")
 
 PromptBuilder = Callable[[int], str]
 SequenceExtractor = Callable[[str, int], List[int]]
@@ -203,9 +203,9 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.save_npz:
         prefix = "en" if args.prompt_language in ("english", "en") else "zh"
-        output_dir = NPZ_EXPORT_ROOT / f"{prefix}-{seq_len}"
+        output_dir = ARTIFACT_ROOT / f"{prefix}-{seq_len}-llm"
         output_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{prefix}-{seq_len}-{num_batches}.npz"
+        filename = f"{prefix}-{seq_len}-{num_batches}-llm.npz"
         output_path = output_dir / filename
         seqs_np = np.asarray(seqs, dtype=np.int64)
         np.savez(output_path, sequences=seqs_np)

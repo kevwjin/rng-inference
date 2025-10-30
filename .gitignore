@@ -8,6 +8,6 @@ __pycache__/
 *.py[cod]
 
 # Project artifacts
-samples/
+artifacts/
 ref/
 *.pt
