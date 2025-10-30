@@ -1,17 +1,13 @@
-__pycache__/
-*.pyc
-
-# files w/o extensions (tmp files during dev, e.g. notes or diff output)
 *
 !*/
 !*.*
 
-# artifacts
+# Ignore Python caches and bytecode
+__pycache__/
+**/__pycache__/
+*.py[cod]
+
+# Project artifacts
 samples/
-samples/**
-
-*.pt
-
-# references (files stored for research reference)
 ref/
-ref/**
+*.pt
