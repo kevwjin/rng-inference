@@ -157,18 +157,21 @@ def run_batches(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate random integer sequences")
     parser.add_argument(
-        "--num-batches", "-b",
-        type=int, default=1,
-        help="Number of sequences to generate")
+        "--prompt-language", "-l",
+        choices=("english", "en", "chinese", "zh"),
+        default="english",
+        help="Prompt language to use for generation (default: english)",
+    )
     parser.add_argument(
         "--sequence-length", "-n",
-        type=int, default=10,
-        help="Number of integers per sequence")
+        type=int,
+        default=10,
+        help="Number of integers per sequence (default: 10)")
     parser.add_argument(
-        "--prompt-language", "-l",
-        choices=("english", "en", "chinese", "zh"), default="english",
-        help="Prompt language to use for generation",
-    )
+        "--num-batches", "-b",
+        type=int,
+        default=1,
+        help="Number of sequences to generate (default: 1)")
     parser.add_argument(
         "--save-npz",
         action="store_true",
