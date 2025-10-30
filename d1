@@ -1,0 +1,73 @@
+diff --git a/sequence_generator.py b/sequence_generator.py
+index 3311c33..8d9bc07 100644
+--- a/sequence_generator.py
++++ b/sequence_generator.py
+@@ -6,9 +6,13 @@ import json
+ import subprocess
+ import sys
+ from dataclasses import dataclass
++from pathlib import Path
+ from typing import Callable, List, Sequence
+ 
++import numpy as np
++
+ DEFAULT_MODEL = "llama3.2:3b-instruct-q4_0"
++NPZ_EXPORT_ROOT = Path("npz_exports")
+ 
+ PromptBuilder = Callable[[int], str]
+ SequenceExtractor = Callable[[str, int], List[int]]
+@@ -84,13 +88,13 @@ def extract_sequence_zh(response: str, expected_len: int) -> List[int]:
+ 
+         integers: List[int] = []
+         for x in xs:
+-           try:
+-               integers.append(int(x))
+-           except ValueError as e:
+-               raise RuntimeError(
+-                   f"model response contained a non-integer token {x!r}: "
+-                   f"{response!r}"
+-               ) from e
++            try:
++                integers.append(int(x))
++            except ValueError as e:
++                raise RuntimeError(
++                    f"model response contained a non-integer token {x!r}: "
++                    f"{response!r}"
++                ) from e
+         return integers
+ 
+     # Fall back to the space-separated format shared with the English prompt.
+@@ -155,9 +159,15 @@ def main(argv: Sequence[str] | None = None) -> int:
+         help="Number of integers per sequence")
+     parser.add_argument(
+         "--prompt-language", "-l",
+-        choices=("english", "en", "chinese", "zh"), default="english",
++        choices=("english", "en", "chinese", "zh"),
++        default="english",
+         help="Prompt language to use for generation",
+     )
++    parser.add_argument(
++        "--save-npz",
++        action="store_true",
++        help="Save sequences as an NPZ file in a language/length-specific directory",
++    )
+     args = parser.parse_args(argv)
+ 
+     def validate_count(value: int, name: str) -> int:
+@@ -186,6 +196,16 @@ def main(argv: Sequence[str] | None = None) -> int:
+ 
+     seqs = [batch.integers for batch in batches]
+     print(json.dumps(seqs))
++
++    if args.save_npz:
++        prefix = "en" if args.prompt_language in ("english", "en") else "zh"
++        output_dir = NPZ_EXPORT_ROOT / f"{prefix}-{seq_len}"
++        output_dir.mkdir(parents=True, exist_ok=True)
++        filename = f"{prefix}-{seq_len}-{num_batches}.npz"
++        output_path = output_dir / filename
++        sequences_array = np.asarray(seqs, dtype=np.int64)
++        np.savez(output_path, sequences=sequences_array)
++
+     return 0
+ 
+ 
