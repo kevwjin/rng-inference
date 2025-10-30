@@ -1,5 +1,0 @@
-setting the range from 0 to 255 results in the chinese prompt outputting significantly more often. the english prompt on the other hand has no problem, which is expected considering llama is from meta, an american company.
-
-depending on the lstm architecture, the lstm could output numbers that it hasn't seen before. but typically, the lstm just has classes that it would output. i'm thinking of generating the training data so that all the numbers are outputted.
-
-right now, my sampling is kinda like autoregressive sampling, but it's reset between batches. i'm thinking that after i get the pipeline setup, i could try it out with autoregressive, but randomly choosing which numbers get sampled. i could also try pure ars and nars sampling.
