@@ -12,7 +12,7 @@ from typing import Callable, List, Sequence
 import numpy as np
 
 DEFAULT_MODEL = "llama3.2:3b-instruct-q4_0"
-NPZ_EXPORT_ROOT = Path("npz_exports")
+NPZ_EXPORT_ROOT = Path("samples")
 
 PromptBuilder = Callable[[int], str]
 SequenceExtractor = Callable[[str, int], List[int]]
