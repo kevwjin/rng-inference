@@ -60,27 +60,22 @@ def generate_sequences(
 
 
 def resolve_model_path(
-    prefix: str,
-    seq_len: int,
     model_path: Path | None
 ) -> Path:
     if model_path is not None:
         return model_path
-    base_dir = ARTIFACT_ROOT / f"{prefix}-{seq_len}"
-    return base_dir / "lstm" / f"{prefix}-{seq_len}-lstm.pt"
+    raise ValueError("--model-path is required when default resolution is disabled")
 
 
 def save_sequences(
     seqs: list[list[int]],
-    prefix: str,
-    seq_len: int,
+    model_path: Path,
     num_seqs: int,
 ) -> Path:
-    base_dir = ARTIFACT_ROOT / f"{prefix}-{seq_len}"
-    output_dir = base_dir / "lstm"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    filename = f"{prefix}-{seq_len}-lstm-{num_seqs}.npz"
-    output_path = output_dir / filename
+    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+    stem = model_path.stem
+    filename = f"{stem}-sample-{num_seqs}.npz"
+    output_path = ARTIFACT_ROOT / filename
     seqs_np = np.asarray(seqs, dtype=np.int64)
     np.savez(output_path, sequences=seqs_np)
     return output_path
@@ -88,12 +83,6 @@ def save_sequences(
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Generate sequences from the trained LSTM")
-    parser.add_argument(
-        "--prompt-language", "-l",
-        choices=("english", "en", "chinese", "zh"),
-        default="english",
-        help="Language tag used for naming outputs (default: english)",
-    )
     parser.add_argument(
         "--sequence-length", "-n",
         type=int,
@@ -115,18 +104,17 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--save-npz",
         action="store_true",
-        help="Save sequences under artifacts/<lang>-<length>-lstm/",
+        help="Save sequences as artifacts/<model-stem>-sample-<count>.npz",
     )
     parser.add_argument(
         "--model-path",
         type=Path,
-        help="Optional explicit path to trained LSTM weights",
+        required=True,
+        help="Path to trained LSTM weights",
     )
     args = parser.parse_args(argv)
 
-    prefix = "en" if args.prompt_language in ("english", "en") else "zh"
-    model_path = resolve_model_path(
-        prefix, args.sequence_length, args.model_path)
+    model_path = resolve_model_path(args.model_path)
     if not model_path.exists():
         parser.error(f"Model weights not found: {model_path}")
 
@@ -145,8 +133,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.save_npz:
         output_path = save_sequences(
             seqs,
-            prefix,
-            args.sequence_length,
+            model_path,
             args.num_sequences
         )
         print(f"Saved sequences to {output_path}", flush=True)

@@ -1,22 +1,21 @@
-"""Generate histograms for every samples/<lang-len> directory."""
+"""Generate histograms for every artifacts/*.npz file."""
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable
 
 import matplotlib.pyplot as plt
 import numpy as np
 
-SAMPLES_ROOT = Path("samples")
+ARTIFACT_ROOT = Path("artifacts")
 
 
-def iter_sequences(npz_paths: Iterable[Path]) -> Iterable[np.ndarray]:
-    """Yield flattened integer arrays from each NPZ file."""
-    for path in npz_paths:
-        with np.load(path) as data:
-            if "sequences" not in data:
-                raise KeyError(f"NPZ file {path} missing 'sequences' array")
-            yield data["sequences"].reshape(-1)
+def load_flattened_sequences(npz_path: Path) -> np.ndarray:
+    """Load and flatten the sequences array from an NPZ artifact."""
+    with np.load(npz_path) as data:
+        if "sequences" not in data:
+            raise KeyError(f"NPZ file {npz_path} missing 'sequences' array")
+        sequences = data["sequences"]
+    return sequences.reshape(-1)
 
 
 def build_histogram(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -27,7 +26,11 @@ def build_histogram(values: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
     return np.histogram(values, bins=bins, range=(min_value, max_value + 1))
 
 
-def plot_histogram(counts: np.ndarray, edges: np.ndarray, output: Path) -> None:
+def plot_histogram(
+    counts: np.ndarray,
+    edges: np.ndarray,
+    output: Path
+) -> None:
     """Render and save the histogram figure to the specified path."""
     fig, ax = plt.subplots(figsize=(8, 4))
     ax.bar(edges[:-1], counts, width=0.9, align="edge", edgecolor="black")
@@ -40,30 +43,27 @@ def plot_histogram(counts: np.ndarray, edges: np.ndarray, output: Path) -> None:
     plt.close(fig)
 
 
-def process_directory(directory: Path) -> None:
-    npz_files = sorted(directory.glob("*.npz"))
-    if not npz_files:
-        return
-
-    flattened = np.concatenate(list(iter_sequences(npz_files)))
+def process_file(npz_path: Path) -> None:
+    flattened = load_flattened_sequences(npz_path)
     counts, edges = build_histogram(flattened)
 
-    output_path = directory / "histogram.png"
+    output_path = npz_path.with_name(f"{npz_path.stem}-hist.png")
     plot_histogram(counts, edges, output_path)
     print(f"Saved {output_path}")
 
 
 def main() -> int:
-    if not SAMPLES_ROOT.is_dir():
-        raise FileNotFoundError(f"Samples directory not found: {SAMPLES_ROOT}")
+    if not ARTIFACT_ROOT.is_dir():
+        raise \
+            FileNotFoundError(f"Artifact directory not found: {ARTIFACT_ROOT}")
 
-    subdirs = sorted(path for path in SAMPLES_ROOT.iterdir() if path.is_dir())
-    if not subdirs:
-        print("No subdirectories found under samples/ to process.")
+    npz_files = sorted(ARTIFACT_ROOT.glob("*.npz"))
+    if not npz_files:
+        print("No NPZ artifacts found under artifacts/ to process.")
         return 0
 
-    for directory in subdirs:
-        process_directory(directory)
+    for npz_path in npz_files:
+        process_file(npz_path)
 
     return 0
 

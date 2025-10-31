@@ -28,19 +28,32 @@ def _load_single_npz(path: Path) -> np.ndarray:
     return seqs.astype(np.int64)
 
 
-def load_sequences(dirs: Iterable[Path]) -> np.ndarray:
-    """Load and concatenate sequences from a collection of NPZ directories."""
-    seqs: list[np.ndarray] = []
-    for dir in dirs:
-        if not dir.is_dir():
-            raise NotADirectoryError(f"{dir} is not a directory")
-        files = sorted(dir.glob("*.npz"))
-        if not files:
-            raise FileNotFoundError(f"no NPZ files found in {dir}")
-        for file in files:
-            seqs.append(_load_single_npz(file))
-    if not seqs:
-        raise ValueError("no sequences were loaded")
+def resolve_npz_files(paths: Iterable[Path]) -> list[Path]:
+    """Return all NPZ files contained in the given directories or files."""
+    files: list[Path] = []
+    for path in paths:
+        if not path.exists():
+            raise FileNotFoundError(f"path does not exist: {path}")
+        if path.is_dir():
+            matches = sorted(path.glob("*.npz"))
+            if not matches:
+                raise FileNotFoundError(f"no NPZ files found in {path}")
+            files.extend(matches)
+        elif path.is_file():
+            if path.suffix != ".npz":
+                raise ValueError(f"expected an NPZ file, got {path}")
+            files.append(path)
+        else:
+            raise FileNotFoundError(f"unreadable path: {path}")
+    if not files:
+        raise ValueError("no NPZ files were resolved")
+    return files
+
+
+def load_sequences(paths: Iterable[Path]) -> np.ndarray:
+    """Load and concatenate sequences from NPZ files or directories."""
+    files = resolve_npz_files(paths)
+    seqs = [_load_single_npz(file) for file in files]
     merged_seqs = np.concatenate(seqs, axis=0)
     return merged_seqs
 

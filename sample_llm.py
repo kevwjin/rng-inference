@@ -160,11 +160,9 @@ def save_sequences(
     seq_len: int,
     num_seqs: int,
 ) -> Path:
-    base_dir = ARTIFACT_ROOT / f"{prefix}-{seq_len}"
-    output_dir = base_dir / "llm"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
     filename = f"{prefix}-{seq_len}-llm-{num_seqs}.npz"
-    output_path = output_dir / filename
+    output_path = ARTIFACT_ROOT / filename
     seqs_np = np.asarray(seqs, dtype=np.int64)
     np.savez(output_path, sequences=seqs_np)
     return output_path
@@ -191,7 +189,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--save-npz",
         action="store_true",
-        help="Save sequences as an NPZ file in a language and length-specific directory",
+        help="Save sequences as artifacts/<lang>-<length>-llm-<count>.npz",
     )
     args = parser.parse_args(argv)
 

@@ -23,11 +23,9 @@ def generate_sequences(
 
 
 def save_sequences(sequences: np.ndarray, seq_len: int, num_seqs: int) -> Path:
-    base_dir = ARTIFACT_ROOT / f"{PREFIX}-{seq_len}"
-    output_dir = base_dir / "rng"
-    output_dir.mkdir(parents=True, exist_ok=True)
+    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
     filename = f"{PREFIX}-{seq_len}-rng-{num_seqs}.npz"
-    output_path = output_dir / filename
+    output_path = ARTIFACT_ROOT / filename
     np.savez(output_path, sequences=sequences)
     return output_path
 
@@ -54,7 +52,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--save-npz",
         action="store_true",
-        help="Save sequences under artifacts/rng-<length>/rng/",
+        help="Save sequences as artifacts/rng-<length>-rng-<count>.npz",
     )
     args = parser.parse_args(argv)
 

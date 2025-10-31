@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Sequence
 
 import torch
 from torch import nn
@@ -12,12 +12,13 @@ from torch.utils.data import DataLoader, Dataset
 from lstm_data import (
     load_sequences,
     map_to_class_indices,
+    resolve_npz_files,
     train_val_test_split,
 )
 
 import argparse
 
-ARTIFACTS_ROOT = Path("artifacts")
+ARTIFACT_ROOT = Path("artifacts")
 NUM_CLASSES = 100
 
 
@@ -120,9 +121,9 @@ def create_dataloader(
 
 
 def prepare_data(
-    dirs: Iterable[Path]
+    paths: Iterable[Path]
 ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
-    seqs = load_sequences(dirs)
+    seqs = load_sequences(paths)
     mapped_seqs = map_to_class_indices(seqs)
     dataset = train_val_test_split(mapped_seqs)
     to_tensor = lambda arr: torch.from_numpy(arr.astype("int64"))
@@ -132,13 +133,37 @@ def prepare_data(
         to_tensor(dataset.test)
     )
 
+
+def infer_sequence_metadata(npz_files: Sequence[Path]) -> tuple[str, int]:
+    """Derive prefix and sequence length from artifact filenames."""
+    if not npz_files:
+        raise ValueError("expected at least one NPZ file")
+
+    prefix_and_len = {tuple(path.stem.split("-")[:2]) for path in npz_files}
+    if len(prefix_and_len) != 1:
+        details = ", ".join("-".join(parts) for parts in prefix_and_len)
+        raise ValueError(
+            "data files must share a common prefix and sequence length; "
+            f"found: {details}"
+        )
+
+    prefix, seq_len_str = prefix_and_len.pop()
+    try:
+        seq_len = int(seq_len_str)
+    except ValueError as exc:
+        raise ValueError(
+            f"unexpected sequence length component {seq_len_str!r} in {npz_files[0].name}"
+        ) from exc
+
+    return prefix, seq_len
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="Train an LSTM on integer sequences")
     parser.add_argument(
-        "--data-dir",
+        "--data-filepath", "-p",
         type=Path,
         required=True,
-        help="Directory containing NPZ files to train with",
+        help="NPZ artifact containing training sequences",
     )
     parser.add_argument(
         "--epochs",
@@ -148,11 +173,10 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    data_dir = args.data_dir
-    if not data_dir.exists():
-        raise FileNotFoundError(f"data directory not found: {data_dir}")
+    npz_files = resolve_npz_files([args.data_filepath])
+    prefix, seq_len = infer_sequence_metadata(npz_files)
 
-    train, val, test = prepare_data([data_dir])
+    train, val, test = prepare_data(npz_files)
     device = get_device()
 
     model = LstmModel(NUM_CLASSES).to(device)
@@ -163,7 +187,7 @@ def main() -> int:
     val_loader = create_dataloader(val, batch_size=4, shuffle=False)
     test_loader = create_dataloader(test, batch_size=4, shuffle=False)
 
-    epochs = 10
+    epochs = args.epochs
     for epoch in range(1, epochs + 1):
         train_metrics = \
             run_epoch(model, train_loader, criterion, optimizer, device)
@@ -185,13 +209,8 @@ def main() -> int:
             f"acc={test_metrics.accuracy:.3f}"
         )
 
-    base_dir = data_dir.parent
-    name_parts = base_dir.name.split("-")
-    prefix, seq_len = name_parts[0], name_parts[1]
-
-    output_dir = base_dir / "lstm"
-    output_dir.mkdir(parents=True, exist_ok=True)
-    model_path = output_dir / f"{prefix}-{seq_len}-lstm.pt"
+    ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
+    model_path = ARTIFACT_ROOT / f"{prefix}-{seq_len}-lstm.pt"
 
     torch.save(model.state_dict(), model_path)
     print(f"Saved model to {model_path}")
