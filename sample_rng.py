@@ -8,7 +8,7 @@ from typing import Sequence
 
 import numpy as np
 
-ARTIFACTS_ROOT = Path("artifacts")
+ARTIFACT_ROOT = Path("artifacts")
 PREFIX = "rng"
 
 
@@ -23,7 +23,7 @@ def generate_sequences(
 
 
 def save_sequences(sequences: np.ndarray, seq_len: int, num_seqs: int) -> Path:
-    base_dir = ARTIFACTS_ROOT / f"{PREFIX}-{seq_len}"
+    base_dir = ARTIFACT_ROOT / f"{PREFIX}-{seq_len}"
     output_dir = base_dir / "rng"
     output_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{PREFIX}-{seq_len}-rng-{num_seqs}.npz"
@@ -54,15 +54,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--save-npz",
         action="store_true",
-        help="Save sequences under artifacts/pr-<length>/rng/",
+        help="Save sequences under artifacts/rng-<length>/rng/",
     )
     args = parser.parse_args(argv)
 
-    seqs = generate_sequences(args.num_batches, args.sequence_length, args.seed)
+    seqs = generate_sequences(args.num_sequences, args.sequence_length, args.seed)
     print(json.dumps(seqs.tolist()))
 
     if args.save_npz:
-        output_path = save_sequences(seqs, args.sequence_length, args.num_batches)
+        output_path = save_sequences(seqs, args.sequence_length, args.num_sequences)
         print(f"Saved sequences to {output_path}", flush=True)
 
     return 0
