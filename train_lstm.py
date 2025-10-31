@@ -148,11 +148,11 @@ def main() -> int:
     )
     args = parser.parse_args()
 
-    dirs = [args.data_dir]
-    if not dirs:
-        raise FileNotFoundError("no data directories found under artifacts/.")
+    data_dir = args.data_dir
+    if not data_dir.exists():
+        raise FileNotFoundError(f"data directory not found: {data_dir}")
 
-    train, val, test = prepare_data(dirs)
+    train, val, test = prepare_data([data_dir])
     device = get_device()
 
     model = LstmModel(NUM_CLASSES).to(device)
@@ -185,13 +185,13 @@ def main() -> int:
             f"acc={test_metrics.accuracy:.3f}"
         )
 
-    # Derive output tag from data directory name
-    data_dir_name = dirs[0].name
-    lang, seq_len = data_dir_name.split("-")
+    base_dir = data_dir.parent
+    name_parts = base_dir.name.split("-")
+    prefix, seq_len = name_parts[0], name_parts[1]
 
-    output_dir = ARTIFACTS_ROOT / f"{lang}-{seq_len}"
+    output_dir = base_dir / "lstm"
     output_dir.mkdir(parents=True, exist_ok=True)
-    model_path = output_dir / f"{lang}-{seq_len}-lstm.pt"
+    model_path = output_dir / f"{prefix}-{seq_len}-lstm.pt"
 
     torch.save(model.state_dict(), model_path)
     print(f"Saved model to {model_path}")
