@@ -26,20 +26,20 @@ class BatchResult:
     integers: List[int]
 
 
-def build_prompt_en(count: int) -> str:
+def build_prompt_en(seq_len: int) -> str:
     """Create an English prompt that requests space-separated integers."""
     return (
-        f"Write out a sequence of {count} random integers "
+        f"Write out a sequence of {seq_len} random integers "
         "between 1 and 100 inclusive. "
         "Separate the integers by a space ' ' character. "
         "DO NOT output anything else.\n"
     )
 
 
-def build_prompt_zh(count: int) -> str:
+def build_prompt_zh(seq_len: int) -> str:
     """Create a Chinese prompt that requests space-separated integers."""
     return (
-        f"写出 {count} 个介于 1 到 100（包含）的随机整数。"
+        f"写出 {seq_len} 个介于 1 到 100（包含）的随机整数。"
         "使用空格字符（' '）分隔这些整数。"
         "不要输出任何其他内容。\n"
     )
@@ -102,7 +102,7 @@ def extract_sequence_zh(response: str, expected_len: int) -> List[int]:
     return extract_sequence_en(response, expected_len)
 
 
-def generate_batch(
+def generate_sequence(
     i: int,
     seq_len: int,
     prompt_builder: PromptBuilder,
@@ -135,23 +135,39 @@ def validate_count(value: int, name: str) -> int:
     return value
 
 
-def run_batches(
-    num_batches: int,
+def generate_sequences(
+    num_seqs: int,
     seq_len: int,
     prompt_builder: PromptBuilder,
     extractor: SequenceExtractor,
 ) -> Sequence[BatchResult]:
     results: List[BatchResult] = []
     i = 1
-    while len(results) < num_batches:
+    while len(results) < num_seqs:
         try:
-            result = generate_batch(i, seq_len, prompt_builder, extractor)
+            result = generate_sequence(i, seq_len, prompt_builder, extractor)
         except RuntimeError as e:
             print(f"Retrying batch {i} after error: {e}", file=sys.stderr)
             continue
         results.append(result)
         i += 1
     return results
+
+
+def save_sequences(
+    seqs: list[list[int]],
+    prefix: str,
+    seq_len: int,
+    num_seqs: int,
+) -> Path:
+    base_dir = ARTIFACT_ROOT / f"{prefix}-{seq_len}"
+    output_dir = base_dir / "llm"
+    output_dir.mkdir(parents=True, exist_ok=True)
+    filename = f"{prefix}-{seq_len}-llm-{num_seqs}.npz"
+    output_path = output_dir / filename
+    seqs_np = np.asarray(seqs, dtype=np.int64)
+    np.savez(output_path, sequences=seqs_np)
+    return output_path
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -168,7 +184,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=10,
         help="Number of integers per sequence (default: 10)")
     parser.add_argument(
-        "--num-batches", "-b",
+        "--num-sequences", "-s",
         type=int,
         default=1,
         help="Number of sequences to generate (default: 1)")
@@ -180,7 +196,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     try:
-        num_batches = validate_count(args.num_batches, "--num-batches")
+        num_seqs = validate_count(args.num_sequences, "--num-sequences")
         seq_len = validate_count(args.sequence_length, "--sequence-length")
     except ValueError as e:
         parser.error(str(e))
@@ -193,23 +209,25 @@ def main(argv: Sequence[str] | None = None) -> int:
         extractor = extract_sequence_zh
 
     try:
-        batches = run_batches(num_batches, seq_len, prompt_builder, extractor)
+        batches = \
+            generate_sequences(num_seqs, seq_len, prompt_builder, extractor)
     except Exception as e:
         print(f"Error: {e}", file=sys.stderr)
         return 1
+
+    prefix = "en" if args.prompt_language in ("english", "en") else "zh"
 
     seqs = [batch.integers for batch in batches]
     print(json.dumps(seqs))
 
     if args.save_npz:
-        prefix = "en" if args.prompt_language in ("english", "en") else "zh"
-        base_dir = ARTIFACT_ROOT / f"{prefix}-{seq_len}"
-        output_dir = base_dir / "llm"
-        output_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{prefix}-{seq_len}-llm-{num_batches}.npz"
-        output_path = output_dir / filename
-        seqs_np = np.asarray(seqs, dtype=np.int64)
-        np.savez(output_path, sequences=seqs_np)
+        output_path = save_sequences(
+            seqs,
+            prefix,
+            args.sequence_length,
+            args.num_sequences,
+        )
+        print(f"Saved sequences to {output_path}", flush=True)
 
     return 0
 
