@@ -62,8 +62,8 @@ def generate_sequences(
 def resolve_model_path(prefix: str, seq_len: int, explicit: Path | None) -> Path:
     if explicit is not None:
         return explicit
-    default_dir = ARTIFACTS_ROOT / f"{prefix}-{seq_len}-lstm"
-    return default_dir / f"{prefix}-{seq_len}-lstm.pt"
+    base_dir = ARTIFACTS_ROOT / f"{prefix}-{seq_len}"
+    return base_dir / "lstm" / f"{prefix}-{seq_len}-lstm.pt"
 
 
 def save_sequences(
@@ -72,7 +72,8 @@ def save_sequences(
     seq_len: int,
     num_batches: int,
 ) -> Path:
-    output_dir = ARTIFACTS_ROOT / f"{prefix}-{seq_len}-lstm"
+    base_dir = ARTIFACTS_ROOT / f"{prefix}-{seq_len}"
+    output_dir = base_dir / "lstm"
     output_dir.mkdir(parents=True, exist_ok=True)
     filename = f"{prefix}-{seq_len}-{num_batches}-lstm.npz"
     output_path = output_dir / filename

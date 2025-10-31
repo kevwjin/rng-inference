@@ -203,9 +203,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.save_npz:
         prefix = "en" if args.prompt_language in ("english", "en") else "zh"
-        output_dir = ARTIFACT_ROOT / f"{prefix}-{seq_len}-llm"
+        base_dir = ARTIFACT_ROOT / f"{prefix}-{seq_len}"
+        output_dir = base_dir / "llm"
         output_dir.mkdir(parents=True, exist_ok=True)
-        filename = f"{prefix}-{seq_len}-{num_batches}-llm.npz"
+        filename = f"{prefix}-{seq_len}-llm-{num_batches}.npz"
         output_path = output_dir / filename
         seqs_np = np.asarray(seqs, dtype=np.int64)
         np.savez(output_path, sequences=seqs_np)
