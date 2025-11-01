@@ -9,7 +9,7 @@ from typing import Sequence
 import numpy as np
 
 ARTIFACT_ROOT = Path("artifacts")
-PREFIX = "rng"
+PREFIX = "na"
 
 
 def generate_sequences(
