@@ -1,1 +1,1 @@
-# cs228-research
+# rng-inference
