@@ -10,6 +10,7 @@ import numpy as np
 
 ARTIFACT_ROOT = Path("artifacts")
 PREFIX = "na"
+PROGRESS_INTERVAL_NUMBERS = 1 << 13  # 8192
 
 
 def generate_sequences(
@@ -19,13 +20,26 @@ def generate_sequences(
 ) -> np.ndarray:
     rng = np.random.default_rng(seed)
     sequences = rng.integers(1, 101, size=(num_seqs, seq_len), endpoint=False)
+    total_numbers = num_seqs * seq_len
+    if total_numbers >= PROGRESS_INTERVAL_NUMBERS:
+        # Print a single completion notice for RNG (generation is vectorized).
+        print(
+            f"Progress: {total_numbers}/{total_numbers} numbers generated",
+            flush=True,
+        )
     return sequences.astype(np.int64)
 
 
-def save_sequences(sequences: np.ndarray, seq_len: int, num_seqs: int) -> Path:
+def save_sequences(
+    sequences: np.ndarray,
+    seq_len: int,
+    num_seqs: int,
+    output_path: Path | None,
+) -> Path:
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
-    filename = f"{PREFIX}-{seq_len}-rng-{num_seqs}.npz"
-    output_path = ARTIFACT_ROOT / filename
+    if output_path is None:
+        filename = f"{PREFIX}-{seq_len}-rng-{num_seqs}.npz"
+        output_path = ARTIFACT_ROOT / filename
     np.savez(output_path, sequences=sequences)
     return output_path
 
@@ -54,13 +68,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Save sequences as artifacts/rng-<length>-rng-<count>.npz",
     )
+    parser.add_argument(
+        "--output-path",
+        type=Path,
+        help="Explicit output .npz path (overrides default naming)",
+    )
     args = parser.parse_args(argv)
 
     seqs = generate_sequences(args.num_sequences, args.sequence_length, args.seed)
     print(json.dumps(seqs.tolist()))
 
     if args.save_npz:
-        output_path = save_sequences(seqs, args.sequence_length, args.num_sequences)
+        output_path = save_sequences(
+            seqs, args.sequence_length, args.num_sequences, args.output_path
+        )
         print(f"Saved sequences to {output_path}", flush=True)
 
     return 0
