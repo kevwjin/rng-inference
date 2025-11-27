@@ -74,6 +74,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         description="Generate ARS/NARS datasets for en/zh LLM prompts and RNG"
     )
     parser.add_argument(
+        "--sources",
+        nargs="+",
+        choices=["en", "zh", "rng"],
+        default=["en", "zh", "rng"],
+        help="Which data sources to generate (default: en zh rng)",
+    )
+    parser.add_argument(
+        "--dataset-types",
+        nargs="+",
+        choices=["ars", "nars"],
+        default=["ars", "nars"],
+        help="Which dataset variants to generate (default: ars nars)",
+    )
+    parser.add_argument(
         "--total-numbers",
         type=int,
         default=131072,
@@ -92,13 +106,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=2,
         help="Number of repeats per condition (default: 2)",
     )
+    parser.add_argument(
+        "--skip-existing",
+        action="store_true",
+        help="Skip generation when target artifact already exists",
+    )
     args = parser.parse_args(argv)
-
-    sources = ["en", "zh", "rng"]
 
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
 
-    for src in sources:
+    for src in args.sources:
         for seq_len in args.lengths:
             if args.total_numbers % seq_len != 0:
                 raise RuntimeError(
@@ -109,32 +126,50 @@ def main(argv: Sequence[str] | None = None) -> int:
 
             for rep in range(1, args.repeats + 1):
                 # ARS: whole sequence per call
-                ars_target = (
-                    ARTIFACT_ROOT / f"{src}-ars-len{seq_len}-n{num_seq}-rep{rep}.npz"
-                )
-                if src == "rng":
-                    run_rng(seq_len, num_seq, None, ars_target)
-                else:
-                    run_llm(src, seq_len, num_seq, ars_target)
-                if not ars_target.exists():
-                    raise RuntimeError(f"Expected ARS artifact missing: {ars_target}")
-                print(f"Saved ARS -> {ars_target}")
+                if "ars" in args.dataset_types:
+                    ars_target = (
+                        ARTIFACT_ROOT
+                        / f"{src}-ars-len{seq_len}-n{num_seq}-rep{rep}.npz"
+                    )
+                    if args.skip_existing and ars_target.exists():
+                        print(f"Skip existing ARS {ars_target}")
+                    else:
+                        if src == "rng":
+                            run_rng(seq_len, num_seq, None, ars_target)
+                        else:
+                            run_llm(src, seq_len, num_seq, ars_target)
+                        if not ars_target.exists():
+                            raise RuntimeError(
+                                f"Expected ARS artifact missing: {ars_target}"
+                            )
+                        print(f"Saved ARS -> {ars_target}")
 
                 # NARS: single-number calls reshaped to target length
-                nars_target = (
-                    ARTIFACT_ROOT / f"{src}-nars-len{seq_len}-n{num_seq}-rep{rep}.npz"
-                )
-                nars_src = ARTIFACT_ROOT / f"{src}-nars-temp-len1-rep{rep}.npz"
-                if src == "rng":
-                    run_rng(1, args.total_numbers, None, nars_src)
-                else:
-                    run_llm(src, 1, args.total_numbers, nars_src)
+                if "nars" in args.dataset_types:
+                    nars_target = (
+                        ARTIFACT_ROOT
+                        / f"{src}-nars-len{seq_len}-n{num_seq}-rep{rep}.npz"
+                    )
+                    if args.skip_existing and nars_target.exists():
+                        print(f"Skip existing NARS {nars_target}")
+                    else:
+                        if src == "rng":
+                            # RNG NARS can be sampled directly at the target length.
+                            run_rng(seq_len, num_seq, None, nars_target)
+                        else:
+                            nars_temp_path = (
+                                ARTIFACT_ROOT / f"{src}-nars-temp-len1-rep{rep}.npz"
+                            )
+                            # LLM NARS uses single-number calls then reshapes.
+                            run_llm(src, 1, args.total_numbers, nars_temp_path)
 
-                if not nars_src.exists():
-                    raise RuntimeError(f"Expected NARS artifact missing: {nars_src}")
-                reshape_npz(nars_src, seq_len, nars_target)
-                nars_src.unlink()
-                print(f"Saved NARS -> {nars_target}")
+                            if not nars_temp_path.exists():
+                                raise RuntimeError(
+                                    f"Expected NARS artifact missing: {nars_temp_path}"
+                                )
+                            reshape_npz(nars_temp_path, seq_len, nars_target)
+                            nars_temp_path.unlink()
+                        print(f"Saved NARS -> {nars_target}")
 
     print("Done. Artifacts in artifacts/.")
     return 0
