@@ -4,6 +4,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+import re
 from typing import Sequence
 
 import numpy as np
@@ -30,15 +31,51 @@ def generate_sequences(
     return sequences.astype(np.int64)
 
 
+def next_available_rep(seq_len: int, num_seqs: int) -> int:
+    """
+    Find the next rep index that avoids clobbering existing RNG artifacts.
+
+    Matches:
+    - {PREFIX}-rng-len{seq_len}-n{num_seqs}-rep<rep>.npz
+    - legacy: {PREFIX}-{seq_len}-rng-{num_seqs}.npz (treated as rep=1)
+    """
+    if not ARTIFACT_ROOT.exists():
+        return 1
+
+    pattern = re.compile(
+        rf"{re.escape(PREFIX)}-rng-len{seq_len}-n{num_seqs}-rep(\d+)\.npz$"
+    )
+    legacy_pattern = re.compile(
+        rf"{re.escape(PREFIX)}-{seq_len}-rng-{num_seqs}\.npz$"
+    )
+
+    max_rep = 0
+    for path in ARTIFACT_ROOT.glob("*.npz"):
+        name = path.name
+        m = pattern.match(name)
+        if m:
+            rep = int(m.group(1))
+            if rep > max_rep:
+                max_rep = rep
+            continue
+        if legacy_pattern.match(name):
+            max_rep = max(max_rep, 1)
+
+    return max_rep + 1
+
+
 def save_sequences(
     sequences: np.ndarray,
     seq_len: int,
     num_seqs: int,
     output_path: Path | None,
+    rep: int,
 ) -> Path:
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
     if output_path is None:
-        filename = f"{PREFIX}-{seq_len}-rng-{num_seqs}.npz"
+        filename = (
+            f"{PREFIX}-rng-len{seq_len}-n{num_seqs}-rep{rep}.npz"
+        )
         output_path = ARTIFACT_ROOT / filename
     np.savez(output_path, sequences=sequences)
     return output_path
@@ -64,9 +101,20 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Optional RNG seed for reproducibility",
     )
     parser.add_argument(
+        "--rep",
+        type=int,
+        default=0,
+        help="Repeat index for default filenames; 0 chooses the next available rep automatically",
+    )
+    parser.add_argument(
         "--save-npz",
         action="store_true",
-        help="Save sequences as artifacts/rng-<length>-rng-<count>.npz",
+        help="Save sequences as artifacts/<prefix>-rng-len<length>-n<count>-rep<rep>.npz",
+    )
+    parser.add_argument(
+        "--output-path",
+        type=Path,
+        help="Explicit output .npz path (overrides default naming)",
     )
     parser.add_argument(
         "--output-path",
@@ -75,12 +123,22 @@ def main(argv: Sequence[str] | None = None) -> int:
     )
     args = parser.parse_args(argv)
 
+    rep_arg = args.rep
+    if rep_arg < 0:
+        parser.error("--rep must be non-negative")
+
+    rep = rep_arg or next_available_rep(args.sequence_length, args.num_sequences)
+
     seqs = generate_sequences(args.num_sequences, args.sequence_length, args.seed)
     print(json.dumps(seqs.tolist()))
 
     if args.save_npz:
         output_path = save_sequences(
-            seqs, args.sequence_length, args.num_sequences, args.output_path
+            seqs,
+            args.sequence_length,
+            args.num_sequences,
+            args.output_path,
+            rep,
         )
         print(f"Saved sequences to {output_path}", flush=True)
 
