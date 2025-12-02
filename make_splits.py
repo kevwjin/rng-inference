@@ -34,6 +34,28 @@ def save_npz(path: Path, **arrays: np.ndarray) -> None:
     )
 
 
+def prepare_and_save(
+    name: str,
+    train_path: Path,
+    test_path: Path,
+    out_dir: Path,
+    global_min: int,
+    seed: int,
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """
+    Load, shift, split 90/10, and save train/val/test NPZ for one dataset.
+    """
+    train_full = load_sequences(train_path) - global_min
+    train, val = split_90_10(train_full, seed=seed)
+    test = load_sequences(test_path) - global_min
+
+    save_npz(
+        out_dir / f"{name}-split.npz",
+        train=train, val=val, test=test
+    )
+    return train, val, test
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(
         description="Create train/val/test splits for EN/ZH/PRNG."
@@ -55,52 +77,34 @@ def main() -> int:
     root = args.root
     seed = args.seed
 
-    # TODO: add history versions of en and zh later
-    files = {
-        "en_train": root / "en-len16-n8192-rep1.npz",
-        "en_test": root / "en-len16-n8192-rep2.npz",
-        "zh_train": root / "zh-llm-len16-n8192-rep1.npz",
-        "zh_test": root / "zh-llm-len16-n8192-rep2.npz",
-        "prng_train": root / "prng-len16-n8192-rep1.npz",
-        "prng_test": root / "prng-len16-n8192-rep2.npz",
-    }
-
     # load and shift values to start at zero (global min=1)
     global_min = 1
-    datasets = {}
-    for name, path in files.items():
-        datasets[name] = load_sequences(path) - global_min
-
-    # EN: split rep1 90/10; use rep2 as external test
-    en_train, en_val = split_90_10(datasets["en_train"], seed=seed)
-    en_ext = datasets["en_test"]
-
-    # ZH: only rep1 available; split 90/10 (no external test yet)
-    zh_train, zh_val = split_90_10(datasets["zh_train"], seed=seed)
-    zh_ext = np.empty((0, *zh_val.shape[1:]), dtype=zh_val.dtype)
-
-    # PRNG: split rep1 90/10; use rep2 as external test
-    prng_train, prng_val = split_90_10(datasets["prng_train"], seed=seed)
-    prng_ext = datasets["prng_test"]
 
     out_dir = root / "splits"
-    save_npz(
-        out_dir / "en-split.npz",
-        train=en_train,
-        val=en_val,
-        test=en_ext
+    # TODO: add history versions of en and zh later
+    en_train, en_val, en_ext = prepare_and_save(
+        "en",
+        root / "en-len16-n8192-rep1.npz",
+        root / "en-len16-n8192-rep2.npz",
+        out_dir,
+        global_min,
+        seed,
     )
-    save_npz(
-        out_dir / "zh-split.npz",
-        train=zh_train,
-        val=zh_val,
-        test=zh_ext
+    zh_train, zh_val, zh_ext = prepare_and_save(
+        "zh",
+        root / "zh-llm-len16-n8192-rep1.npz",
+        root / "zh-llm-len16-n8192-rep2.npz",
+        out_dir,
+        global_min,
+        seed,
     )
-    save_npz(
-        out_dir / "prng-split.npz",
-        train=prng_train,
-        val=prng_val,
-        test=prng_ext
+    prng_train, prng_val, prng_ext = prepare_and_save(
+        "prng",
+        root / "prng-len16-n8192-rep1.npz",
+        root / "prng-len16-n8192-rep2.npz",
+        out_dir,
+        global_min,
+        seed,
     )
 
     # log min/max after shift (should be >=0 and <=255)
