@@ -12,6 +12,7 @@ from typing import Callable, List, Sequence
 import numpy as np
 
 DEFAULT_MODEL = "llama3.2:3b-instruct-q4_0"
+PROGRESS_INTERVAL_NUMBERS = 1 << 13  # 8192
 ARTIFACT_ROOT = Path("artifacts")
 
 PromptBuilder = Callable[[int], str]
@@ -28,21 +29,33 @@ class BatchResult:
 
 def build_prompt_en(seq_len: int) -> str:
     """Create an English prompt that requests space-separated integers."""
-    return (
-        f"Write out a sequence of {seq_len} random integers "
-        "between 1 and 100 inclusive. "
-        "Separate the integers by a space ' ' character. "
-        "DO NOT output anything else.\n"
-    )
+    if seq_len == 1:
+        return (
+            "Pick a single random integer between 1 and 100 inclusive. "
+            "DO NOT output anything else."
+        )
+    else:
+        return (
+            f"Write out a sequence of {seq_len} random integers "
+            "between 1 and 100 inclusive. "
+            "Separate the integers by a space ' ' character. "
+            "DO NOT output anything else.\n"
+        )
 
 
 def build_prompt_zh(seq_len: int) -> str:
     """Create a Chinese prompt that requests space-separated integers."""
-    return (
-        f"写出 {seq_len} 个介于 1 到 100（包含）的随机整数。"
-        "使用空格字符（' '）分隔这些整数。"
-        "不要输出任何其他内容。\n"
-    )
+    if seq_len == 1:
+        return (
+            "选择一个介于 1 到 100 之间的随机整数，包含 1 和 100。"
+            "不要输出任何其他内容。"
+        )
+    else:
+        return (
+            f"写出 {seq_len} 介于 1 到 100（包含 1 和 100）的随机整数。"
+            "使用空格字符（' '）分隔这些整数。"
+            "不要输出任何其他内容。\n"
+        )
 
 
 def run_ollama(prompt: str) -> subprocess.CompletedProcess[str]:
@@ -150,6 +163,14 @@ def generate_sequences(
             print(f"Retrying batch {i} after error: {e}", file=sys.stderr)
             continue
         results.append(result)
+        numbers_generated = len(results) * seq_len
+        total_numbers = num_seqs * seq_len
+        if numbers_generated % PROGRESS_INTERVAL_NUMBERS == 0 or numbers_generated == total_numbers:
+            print(
+                f"Progress: {numbers_generated}/{total_numbers} numbers generated",
+                file=sys.stderr,
+                flush=True,
+            )
         i += 1
     return results
 
@@ -159,10 +180,12 @@ def save_sequences(
     prefix: str,
     seq_len: int,
     num_seqs: int,
+    output_path: Path | None,
 ) -> Path:
     ARTIFACT_ROOT.mkdir(parents=True, exist_ok=True)
-    filename = f"{prefix}-{seq_len}-llm-{num_seqs}.npz"
-    output_path = ARTIFACT_ROOT / filename
+    if output_path is None:
+        filename = f"{prefix}-{seq_len}-llm-{num_seqs}.npz"
+        output_path = ARTIFACT_ROOT / filename
     seqs_np = np.asarray(seqs, dtype=np.int64)
     np.savez(output_path, sequences=seqs_np)
     return output_path
@@ -190,6 +213,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--save-npz",
         action="store_true",
         help="Save sequences as artifacts/<lang>-<length>-llm-<count>.npz",
+    )
+    parser.add_argument(
+        "--output-path",
+        type=Path,
+        help="Explicit output .npz path (overrides default naming)",
     )
     args = parser.parse_args(argv)
 
@@ -224,6 +252,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             prefix,
             args.sequence_length,
             args.num_sequences,
+            args.output_path,
         )
         print(f"Saved sequences to {output_path}", flush=True)
 
