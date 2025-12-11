@@ -8,6 +8,5 @@ __pycache__/
 *.py[cod]
 
 # Project artifacts
-artifacts/
 ref/
 *.pt
