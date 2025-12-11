@@ -1,0 +1,25 @@
+- Objective: estimate the model’s next-token distribution at each position under its own sampling policy, conditioned on the evolving
+  context. Exact computation over all possible sequences is intractable (100^k growth), so we approximate the expectation by sampling
+  rollouts.
+- Procedure for one rollout of length T:
+    1. Start with the prompt. Run the model once to get logits at the last position; softmax → next-token distribution over the full
+       vocab.
+    2. Record this distribution (or whatever subset you care about).
+    3. Sample one token from this distribution (categorical draw). Append it to the context.
+    4. Feed the new token to the model (using KV cache) to advance one step.
+    5. Repeat steps 1–4 until you’ve generated T tokens.
+- Aggregation over N rollouts:
+    - At each position t, you have N recorded next-token distributions (one per rollout). Average them to estimate the expected
+      distribution under the model’s own sampling process.
+    - Standard Monte Carlo error shrinks as ~1/√N; more rollouts → lower variance.
+- Single-token vs multi-token numbers:
+    - If a number is one token, its probability at step t is just the softmax value for that token.
+    - If a number spans multiple tokens, its probability is the product of conditional probabilities for each token in sequence; to get
+      it exactly, you must roll the context forward token-by-token (expensive).
+- What this captures (and what it doesn’t):
+    - It captures the model’s behavior given its own sampled histories (not an average over all possible histories).
+    - It does not give the exact, history-marginalized distribution (which would require summing over all histories).
+    - It assumes the sampling policy you use during rollout (here: pure categorical, no temperature/top-k/p).
+- When interpreting results:
+    - Report the number of rollouts N and sequence length T.
+    - If you renormalize a subset (e.g., integers 1-100), note that these are conditional/relative probabilities over that subset, not absolute mass.
