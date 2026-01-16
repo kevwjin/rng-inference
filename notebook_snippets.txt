@@ -1,0 +1,98 @@
+Notion: paths assume you run from notebooks/ (../ to repo root).
+
+Loss matrix (probe_losses) – visualize as heatmap
+------------------------------------------------
+```python
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Run probe_losses via CLI to produce JSON
+!python ../probe_losses.py --en-split ../artifacts/splits/en-split.npz --zh-split ../artifacts/splits/zh-split.npz --prng-split ../artifacts/splits/prng-split.npz --en-model ../artifacts/en-split-lstm.pt --zh-model ../artifacts/zh-split-lstm.pt --prng-model ../artifacts/prng-split-lstm.pt --probe-count 500 --out-json ../artifacts/probe_losses.json
+
+import json
+with open("../artifacts/probe_losses.json") as f:
+    results = json.load(f)
+models = ["en","zh","prng"]
+probes = ["en","zh","prng"]
+df = pd.DataFrame([[results[m][p]["loss"] for p in probes] for m in models], index=models, columns=probes)
+
+plt.figure(figsize=(5,4))
+sns.heatmap(df, annot=True, fmt=".2f", cmap="magma_r")
+plt.title("Probe losses (lower is better)")
+plt.xlabel("Probe")
+plt.ylabel("Model")
+plt.show()
+```
+
+Gradient norm matrix (probe_gradients) – visualize as heatmap
+------------------------------------------------------------
+```python
+import pandas as pd
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+grad_data = {
+    ("EN","EN"): 0.7066, ("EN","ZH"): 5.7587, ("EN","PRNG"): 3.2134,
+    ("ZH","EN"): 1.6128, ("ZH","ZH"): 4.9774, ("ZH","PRNG"): 3.2493,
+    ("PRNG","EN"): 0.6022, ("PRNG","ZH"): 0.6692, ("PRNG","PRNG"): 0.2803,
+}
+models = ["EN","ZH","PRNG"]
+probes = ["EN","ZH","PRNG"]
+dfg = pd.DataFrame([[grad_data[(m,p)] for p in probes] for m in models], index=models, columns=probes)
+
+plt.figure(figsize=(5,4))
+sns.heatmap(dfg, annot=True, fmt=".3f", cmap="magma_r")
+plt.title("Probe gradient norms (lower is better)")
+plt.xlabel("Probe")
+plt.ylabel("Model")
+plt.show()
+```
+
+Federated clients: table/bar of per-client probe losses
+------------------------------------------------------
+```python
+import pandas as pd
+import json
+import matplotlib.pyplot as plt
+
+%matplotlib inline
+# Generate JSON (adjust paths if needed)
+!python ../simulate_federated_probes.py --en-data ../artifacts/splits/en-split.npz --zh-data ../artifacts/splits/zh-split.npz --prng-data ../artifacts/splits/prng-split.npz --clients-per-source 1 --local-epochs 1 --out-json ../artifacts/fed_clients.json
+
+with open("../artifacts/fed_clients.json") as f:
+    dfc = pd.DataFrame(json.load(f))
+# Expect columns: client, source, probe, loss, acc
+dfc_pivot = dfc.pivot(index="client", columns="probe", values="loss")
+display(dfc_pivot)
+
+dfc.plot(x="client", y="loss", kind="bar", rot=45)
+plt.ylabel("Loss")
+plt.title("Per-client probe losses")
+plt.show()
+```
+
+Mixture inference: true vs inferred proportion
+----------------------------------------------
+```python
+import pandas as pd
+import matplotlib.pyplot as plt
+import json
+
+# Generate JSON (adjust paths if needed)
+!python ../mixture_inference.py --en-split ../artifacts/splits/en-split.npz --zh-split ../artifacts/splits/zh-split.npz --en-model ../artifacts/en-split-lstm.pt --zh-model ../artifacts/zh-split-lstm.pt --probe-count 500 --out-json ../artifacts/mixture.json
+
+with open("../artifacts/mixture.json") as f:
+    mix_json = json.load(f)
+dfm = pd.DataFrame(mix_json["rows"])
+display(dfm)
+
+plt.figure(figsize=(5,4))
+plt.plot(dfm["true_en"], dfm["inferred_en"], marker="o", label="inferred")
+plt.plot([0,1],[0,1], linestyle="--", color="gray", label="ideal")
+plt.xlabel("True EN proportion")
+plt.ylabel("Inferred EN proportion")
+plt.legend()
+plt.title("Mixture inference (loss-based)")
+plt.show()
+```

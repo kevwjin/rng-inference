@@ -219,6 +219,29 @@ def print_report(summary: DatasetSummary) -> None:
         )
 
 
+def plot_global_hist(seqs: np.ndarray | Path, output: Path | None = None):
+    """Plot global histogram of values; returns (fig, ax)."""
+    import matplotlib.pyplot as plt
+
+    arr = load_sequences(seqs) if isinstance(seqs, Path) else np.asarray(seqs)
+    flat = arr.reshape(-1)
+    min_v, max_v = int(flat.min()), int(flat.max())
+    bins = max_v - min_v + 1
+    counts, edges = np.histogram(flat, bins=bins, range=(min_v, max_v + 1))
+
+    fig, ax = plt.subplots(figsize=(8, 4))
+    ax.bar(edges[:-1], counts, width=0.9, align="edge", edgecolor="black")
+    ax.set_xlabel("Integer value")
+    ax.set_ylabel("Frequency")
+    ax.set_title("Global histogram")
+    ax.set_xlim(edges[0], edges[-1])
+    fig.tight_layout()
+    if output is not None:
+        fig.savefig(output)
+        plt.close(fig)
+    return fig, ax
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     import argparse
 

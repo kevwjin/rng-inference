@@ -1,0 +1,9 @@
+Brainstorming notes (high level):
+
+- Datasets: EN and ZH ARS len-16 reps (8192 sequences each) are the primary sets; PRNG reps as controls. EN skews high with spikes (e.g., 11,13,19,28,31,46,67,85,91,98). ZH tends to skew low/monotonic.
+- History variants: EN history set is heavily biased but usable as a supplementary variant. ZH history collapses into ordered 1..n patterns—treat as failed/observational unless regenerated with stricter prompts/validation.
+- Splits: 90/10 train/val on rep1; rep2 as external test (where available). Values shifted to start at 0; shared vocab target 0–255.
+- Training plan: Train separate LSTMs for EN/ZH/PRNG with shared vocab/architecture; probe-loss attribution using held-out EN/ZH/PRNG batches. Cross-replicate evaluation to avoid overfitting to one generation.
+- Integrity: Biases are strong; attribution should be easy. Note biases explicitly in reporting; PRNG serves as negative control.
+- Optional robustness (time permitting): prompt/history variants, length-8 pilot, stricter ZH generation, rejection of monotonic outputs for history prompts.
+- Mixture inference idea: Build synthetic mixes of EN/ZH (e.g., 25/75, 50/50, 75/25) from held-out sequences and see if you can recover the mixture proportion using probe losses/likelihoods or a small regressor on loss vectors. Good follow-up after basic probe attribution.

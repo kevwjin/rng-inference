@@ -1,0 +1,6 @@
+Plan to get mi_eval.py working:
+1. Inspect current mi_eval.py implementation and note external dependencies (transformers, HF models).
+2. Decide whether to adapt it to LSTM pipeline or configure environment with HF model; confirm requirements.
+3. Modify mi_eval.py accordingly (either integrate LSTM scoring or ensure HF dependency is installed and accessible).
+4. Add notebook helper snippets that call the updated mi_eval functions and render desired plots.
+5. Test end-to-end from CLI/notebook to ensure the new MI evaluation runs without missing dependencies.

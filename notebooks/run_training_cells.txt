@@ -1,0 +1,29 @@
+Notebook cells (run from notebooks/; use ../ to reach repo root):
+
+Setup (once):
+```python
+import sys
+from pathlib import Path
+
+ROOT = Path("..").resolve()
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
+ARTIFACTS = ROOT / "artifacts" / "splits"
+print(list(ARTIFACTS.glob("*.npz")))
+```
+
+Train LSTMs (CLI calls):
+```python
+!python ../train_lstm_classifier.py --data ../artifacts/splits/en-split.npz --epochs 10 --batch-size 128
+!python ../train_lstm_classifier.py --data ../artifacts/splits/zh-split.npz --epochs 10 --batch-size 128
+!python ../train_lstm_classifier.py --data ../artifacts/splits/prng-split.npz --epochs 10 --batch-size 128
+```
+
+Load splits and inspect shapes/min/max (optional):
+```python
+import numpy as np
+for p in ARTIFACTS.glob("*.npz"):
+    data = np.load(p)
+    arr = np.concatenate([data[k] for k in data])
+    print(p.name, arr.shape, arr.min(), arr.max())
+```
