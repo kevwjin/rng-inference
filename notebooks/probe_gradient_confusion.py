@@ -92,15 +92,14 @@ def plot_grad_confusion(df: pd.DataFrame) -> None:
         .reindex(order, axis=0)
         .reindex(order, axis=1)
     )
-    sns.heatmap(
-        mat,
-        annot=mat.applymap(lambda x: f"{x:.2f}"),
-        fmt="",
-        cmap="mako_r",
-    )
-    plt.title("Gradient Norm Confusion Matrix (darker = better match)")
+
+    out_png = ARTIFACTS / "gradient-confusion.png"
+    plt.figure(figsize=(5, 4))
+    sns.heatmap(mat, annot=True, fmt=".2f", cmap="magma_r")
+    plt.title("Gradient Norm")
     plt.ylabel("Model")
     plt.xlabel("Probe")
+    plt.savefig(out_png, dpi=300, bbox_inches="tight")
     plt.show()
 
 
