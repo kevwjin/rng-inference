@@ -1,0 +1,16 @@
+Goal: measure generation reliability for lengths 2,4,6,8,16,32 in EN/zh using the exact sample_llm prompts, with 100 runs per length/language. Record successes (exact length AND all integers in [1,100]); also count out-of-range and length mismatches.
+
+Plan
+1) Inspect sample_llm prompt builders to reuse exactly (build_prompt_en / build_prompt_zh, no history).
+2) Write a script that, for each lang ∈ {en, zh} and length ∈ {2,4,6,8,16,32}, runs 100 generations via the same interface as sample_llm (ollama run with DEFAULT_MODEL).
+3) Extend the extractors (or wrap them) to also check in-range after parsing. Count per generation:
+   - success: length == requested AND all integers ∈ [1,100]
+   - length_mismatch: parsed length != requested
+   - out_of_range: any integer <1 or >100
+4) Aggregate counts per (lang, length); optionally save raw sequences for debugging. Report successes out of 100. Output JSON summary.
+5) Output a report (table/JSON) summarizing counts and failure rates.
+
+Notes
+- Keep prompts identical to sample_llm to avoid changing behavior.
+- Prefer batching to avoid rate limits; but default to sequential if needed.
+- Make model path configurable via env/flag; default to sample_llm DEFAULT_MODEL.
