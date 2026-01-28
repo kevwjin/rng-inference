@@ -1,0 +1,129 @@
+Here’s what a **submission-ready repo** should include for this paper, based on what’s described in the pipeline + implementation details. 
+
+## 1) Reproducible “one command” entrypoints
+
+* `README.md` with: overview of the question (“prompt-language leakage via MI on downstream LSTMs”), repo layout, and exact steps to reproduce key figures/results (esp. the pipeline in Fig. 1). 
+* Make targets or scripts:
+
+  * `make sample` (LLM sampling / dataset gen)
+  * `make train` (train EN / ZH / mixtures LSTMs)
+  * `make probe` (loss + gradient probes)
+  * `make figs` (generate Fig. 2–8 equivalents)
+  * `make reproduce` (end-to-end)
+
+## 2) Environment + dependency pinning (critical here)
+
+Because the paper is very specific about the inference stack (Ollama + llama.cpp + GGUF + commit/tag), include:
+
+* `environment.yml` / `requirements.txt` with pinned versions
+* a `Dockerfile` (strongly recommended) that pins:
+
+  * Ollama version (paper uses Ollama 0.13.0) and llama.cpp backend commit/tag (gguf-v0.17.1; commit 381174b) 
+* A script like `scripts/print_env.sh` that dumps:
+
+  * `ollama --version`
+  * llama.cpp commit hash
+  * model file hash (GGUF) and quantization metadata (since the paper relies on those specifics) 
+
+## 3) Prompts + sampling config captured as artifacts
+
+Include exactly what was used:
+
+* `prompts/en.txt` and `prompts/zh.txt` containing the semantically equivalent prompts (with `{seq_len}` template). 
+* `configs/sampling.yaml` specifying:
+
+  * sampling methodology: **NARS** (non-autoregressive sampling) 
+  * integer range 1–100 (and why: avoids failure modes + 1–999 are single-token) 
+  * number of sequences (paper uses 8,192 per probe set in evaluation plots) 
+  * seq lengths tested (2,4,8,16,32) and the selected **T=16** rule (success + entropy gap rationale) 
+
+## 4) Dataset generation + validation utilities
+
+You should have:
+
+* `scripts/generate_sequences.py` that:
+
+  * calls Ollama (or llama.cpp via Ollama) to generate sequences for a given prompt/lang + seq_len
+  * saves **raw generations** and **parsed sequences**
+* `scripts/validate_sequences.py` implementing the correctness checks:
+
+  * exact requested length
+  * all integers within range 
+* A `data/` policy:
+
+  * either include small sample datasets in-repo + a script to regenerate full sets, **or** provide a reproducible download mechanism with hashes.
+
+## 5) Monte Carlo rollout + entropy analysis code
+
+Because length selection depends on the rollout method:
+
+* `rollouts/` module that:
+
+  * extracts next-token probabilities over tokens 1–100, renormalizes, computes per-step Shannon entropy 
+  * produces heatmaps + entropy curves (Fig. 2–4) 
+* Save intermediate rollout outputs (or cache) so figure generation is deterministic/restartable.
+
+## 6) Downstream LSTM training code (exact spec)
+
+Include a clean training script + config that matches:
+
+* architecture: 64-dim embedding → 128-unit single-layer LSTM → linear head to vocab size 100 
+* teacher forcing on 16-token windows
+* CE loss, Adam lr=1e-3, batch size 128, grad clip 1.0 
+* checkpointing: “select best val snapshot” behavior 
+* dataset splits: 90/10 train/val and a separate held-out set used as probe pool 
+
+## 7) Probing implementations (loss + gradient)
+
+You need two “white-box probes” that mirror the paper:
+
+* Loss probe:
+
+  * per-token average logprob / negative loglikelihood style scoring over sequences 
+* Gradient probe:
+
+  * one backward pass; compute ∥∇θL∥₂ over **embedding + LSTM** parameters (exclude output head per paper) 
+* Scripts to produce:
+
+  * probe loss matrix (Fig. 5)
+  * gradient norm matrix (Fig. 6)
+  * membership inference ROC curves (Fig. 7) 
+
+## 8) Mixture inference code + calibration plots
+
+Include:
+
+* `scripts/make_mixtures.py` that builds probe sets with p ∈ {0, .25, .5, .75, 1} by mixing from held-out EN and ZH pools 
+* `scripts/fit_regressor.py` that fits the linear regressors:
+
+  * p̂ = α + β ℓ_EN + γ ℓ_ZH (loss features)
+  * p̂ = α′ + β′ g_EN + γ′ g_ZH (gradient features) 
+* `scripts/plot_calibration.py` generating calibration plots (Fig. 8). 
+
+## 9) Results + provenance artifacts
+
+For submission readiness (and easy reviewing):
+
+* `results/` with:
+
+  * CSV/JSON dumps of key metrics (loss matrices, gradient matrices, ROC AUCs, regressor fits, calibration points)
+  * figure outputs (`.png`/`.pdf`) reproducibly generated
+* `ARTIFACTS.md` explaining what’s checked in vs regenerated and expected compute/runtime notes (paper mentions sampling can take days on local hardware). 
+
+## 10) Documentation reviewers will look for
+
+* A “Reproduce paper figures” section mapping commands → figures:
+
+  * Fig. 1 (pipeline diagram can be in README)
+  * Fig. 2–4 (rollout heatmaps/entropy curves)
+  * Fig. 5–6 (probe matrices)
+  * Fig. 7 (ROC)
+  * Fig. 8 (calibration) 
+* A clear note about **white-box assumption** (needs gradients/params) and what’s *not* covered (black-box extension is future work). 
+* License + citation:
+
+  * `LICENSE`
+  * `CITATION.cff` / `bibtex.bib`
+
+If you want, paste your current repo tree and I’ll tell you what’s missing relative to this checklist (and what to cut to keep it tight).
+
